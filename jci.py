@@ -15,12 +15,9 @@ Example:
   >>> jobcontrol [configfile] -runtask
 '''
 
-
 # @Date    : 2016-12-31 23:35:18
 # @Author  : wudi (wudi@xiyuetech.com)
-# @Version : 2.1
-
-# github merge测试
+# @Version : 2.4
 
 # base module
 import json
@@ -163,12 +160,64 @@ class RunJob:
             self.log.error(str(e).decode('utf-8').encode(tp))
             return False
 
+    # issue-003
+    def getAttunityTaskList(self, pdir, ddir, pattern):
+        """get Attunity Replicate Task List"""
+        # Get ATTUNITY REPLICATE TASK status command
+        tsklist = []
+        GETTASKLISTCMD = 'connect\ngettasklist %s\nquit\n'
+        try:
+            # issue-001 start
+            if 'Linux' in platform.system():
+                repcmd = 'repctl'
+            elif 'Windows' in platform.system():
+                repcmd = 'repctl.exe'
+            cmd = '%s -d "%s"' % (repcmd,ddir, )
+            # cmd = 'repctl -d "%s"' % (ddir, )
+            # issue-001 end
+            CDCPRO = os.path.join(pdir, cmd)
+            # CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
+            p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE)
+            p.stdin.write(GETTASKLISTCMD % (pattern))
+            b = ''
+            start = False
+            p.stdin.flush()
+
+            # 去掉AR返回值中的头部和尾部，只保留JSON部分
+            while 1:
+                si = p.stdout.readline()
+                if not si:
+                    break
+                if (si[0] == '{'):
+                    start = True
+                if start:
+                    b = b + si
+                    if (si[0] == '}'):
+                        break
+            xx = json.loads(b)
+            for tsk in xx['task_desc_list']:
+                tsklist.append(tsk['name'])
+        except Exception, e:
+            self.log.error(str(e))
+        return tsklist
+
     def runAttunityTask(self, pdir, ddir, taskname, operation, flags):
         """ start Attunity Replicate TASK"""
+        if taskname not in self.getAttunityTaskList(pdir,ddir,'%' + taskname + '%'):
+            errmsg = 'task not found:%s' % (taskname)
+            self.log.error(errmsg)
+            return {'st': 'exception',
+                    'rcd': errmsg}
         try:
-            cmd = 'repctl -d "%s"' % (ddir, )
+            # issue-001 start
+            if 'Linux' in platform.system():
+                repcmd = 'repctl'
+            elif 'Windows' in platform.system():
+                repcmd = 'repctl.exe'
+            cmd = '%s -d "%s"' % (repcmd, ddir, )
+            # issue-001 end
             CDCPRO = os.path.join(pdir, cmd)
-            #CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
             startar = 'connect\nexecute task=%s operation=%d flags=%d\nquit\n'
@@ -195,11 +244,23 @@ class RunJob:
              'full_load_completed': 'false',
              'start_time': '1970-01-01 00:00:00',
              'stop_time': '1970-01-01 00:00:00'}
+        if taskname not in self.getAttunityTaskList(pdir,ddir,'%' + taskname + '%'):
+            errmsg = 'task not found:%s' % (taskname)
+            self.log.error(errmsg)
+            r['state'] = errmsg
+            return r
 
         # Get ATTUNITY REPLICATE TASK status command
         GETTASKSTATUSCMD = 'connect\ngettaskstatus %s\nquit\n'
         try:
-            cmd = 'repctl -d "%s"' % (ddir, )
+            # issue-001 start
+            if 'Linux' in platform.system():
+                repcmd = 'repctl'
+            elif 'Windows' in platform.system():
+                repcmd = 'repctl.exe'
+            cmd = '%s -d "%s"' % (repcmd, ddir, )
+            # cmd = 'repctl -d "%s"' % (ddir, )
+            # issue-001 end
             CDCPRO = os.path.join(pdir, cmd)
             # CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
@@ -222,9 +283,15 @@ class RunJob:
                         break
             xx = json.loads(b)
 
+            # issue-002 start
+            if 'start_time' in xx['task_status']:
+                task_start_time = self.__formatARTime(xx['task_status']['start_time'])
+            else:
+                task_start_time = '1970-01-01 00:00:00'
+            # issue-002 end
             r = {'state': xx['task_status']["state"],
                  "full_load_completed": str(xx['task_status']['full_load_completed']),
-                 'start_time': self.__formatARTime(xx['task_status']['start_time'])
+                 'start_time': task_start_time
                  }
             # task正在运行时不会有stop_time这个key
             # 'stop_time': self.__formatARTime(xx['task_status']['stop_time']),
@@ -332,7 +399,7 @@ class JobCtlInterface(RunJob):
     def __getRepDBName(self):
         '''获取运行时资料库全路径'''
         repdbpath = os.path.join(self.__scriptPath, 'runtimedb')
-        #repdbpath = self.__scriptPath + '\\' + 'runtimedb'
+        # repdbpath = self.__scriptPath + '\\' + 'runtimedb'
         if not os.path.exists(repdbpath):
             os.mkdir(repdbpath)
         return os.path.join(repdbpath, self.tconfig['TASKNAME'] + '.DB')
@@ -734,6 +801,7 @@ class JobCtlInterface(RunJob):
         else:
             self.log.warn('MAILCONFIG NOT FOUND')
 
+
     def runAttunityTask(self, jobid):
         jbcfg = self.getJobInfo(jobid)
         return RunJob.runAttunityTask(self,
@@ -1046,6 +1114,7 @@ def test():
     """debug function"""
     print "this method is empty!"
     jci.checkConfig()
+    # jci.getAttunityTaskList("D:/attunity/bin","D:/attunity/data",'%');
 
 
 def main():
@@ -1157,5 +1226,4 @@ def debug():
 
 
 if __name__ == '__main__':
-    main()
-    
+     main()

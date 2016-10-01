@@ -461,4 +461,12 @@ CONFIG FILE TYPE:JSON
 ```
 
 
-git merge test
+# issue list
+## issue-001 
+原程序默认使用repctl进行replicate的调度，但有些ar版本，bin目录会存在repctl和repctl.exe两个文件，并且repctl本身是无效的情况，所以判断操作系统，如果是windows则使用repctl.exe，如果是linux，则使用repctl
+
+## issue-002
+旧版本ar中，task_status中不包含start_time，需要判断后再返回
+
+## issue-003
+运行task时，判断task是否存在

@@ -1,0 +1,99 @@
+{
+  "TASKNAME":"TEST",
+  "WAITSEC":5,
+  "MAXJOB":5,
+  "LOGLEVEL":"DEBUG",
+  "LOGSHOWCONSOLE":false,
+  "ORACLE_BIN_PATH":"D:\\oracleClient64",
+  "ORACLE_LIB_PATH":"D:\\oracleClient64",
+  "MAILCONFIG":{
+       "MAILTO_LIST":["abc@xxx.com"],
+       "MAIL_HOST":"smtp.xxx.com",
+       "MAIL_USER":"xxx@xxx.com",
+       "MAIL_PWD":"password",
+       "MAIL_POSTFIX":"xxx.com"
+  },
+  "TASKCONFIG":[
+      {
+        "JOBID":"J_WAITFLAG",
+        "DES":"等待数据库标志位",
+        "DEP":"",
+        "JOBTYPE":"SELECTDBSQL",
+        "CONNECTINFO":{
+            "DBID":"d1",
+            "TYPE":"ORACLE",
+            "TNS":"MY-DEV-203.2-TEST",
+            "USER":"test",
+            "PWD" :"exit"},
+        "EXECUTE":"select flag,flag2 from flagtest where flag=2",
+        "PARAM":{},
+        "SUCESSEXPRESSION":"rcd[0]==2 and rcd[1]=='sucess'",
+        "LOOP":{"WAITSEC":10,"TIMEOUTCNT":5},
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J_RUNARTASK",
+        "DEP":"J_WAITFLAG",
+        "DES":"运行Attunity Replicate task,test full load only",
+        "JOBTYPE":"RUN_AR_TASK",
+        "EXECUTE":"ARTASK",
+        "PARAM":{"OPERATION":1,"FLAGS":1},
+        "ARCONFIG":{
+          "PRO_DIR": "D:/attunity/bin",
+          "DATA_DIR":"D:/attunity/Data"
+        },
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J_WAIT_ARTEST",
+        "DEP":"J_RUNARTASK",
+        "DES":"等该AR TASK运行完成",
+        "JOBTYPE":"GET_AR_TASK_STATUS",
+        "EXECUTE":"ARTASK",
+        "SUCESSEXPRESSION":"rcd['state']=='STOPPED' and rcd['full_load_completed']=='True'",
+        "LOOP":{"WAITSEC":10,"TIMEOUTCNT":12},
+        "PARAM":{},
+        "ARCONFIG":{
+          "PRO_DIR": "D:/attunity/bin",
+          "DATA_DIR":"D:/attunity/Data"
+        },
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J4",
+        "DEP":"J_WAIT_ARTEST",
+        "DES":"执行存储过程",
+        "JOBTYPE":"DB_PROC",
+        "DBID":"d1",
+        "EXECUTE":"sp_t1",
+        "CONNECTINFO":{
+            "DBID":"d1",
+            "TYPE":"ORACLE",
+            "TNS":"MY-DEV-203.2-TEST",
+            "USER":"test",
+            "PWD" :"exit"},
+        "PARAM":[1,"1"],
+        "SUCESSEXPRESSION":"rcd[0]==2",
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J5",
+        "DEP":"J4",
+        "DES":"执行脚本",
+        "JOBTYPE":"SHELL",
+        "EXECUTE":"D:\\CODE\\jci\\testjob\\t1.cmd",
+        "PARAM":"",
+        "SUCESSEXPRESSION":"rcd=='0'",
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J6",
+        "DEP":"J4",
+        "JOBTYPE":"GET_JOB_STATE",
+        "EXECUTE":"J4",
+        "SUCESSEXPRESSION":"rcd['status']=='FINISH' and str(rcd['msg'].split(';')[0])=='2'",
+        "SENTMAIL":0,
+        "PARAM":""
+      }
+    ]
+}

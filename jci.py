@@ -9,22 +9,15 @@
 Notes:
 
 1.需要安装ORACLE客户端
-2.目前支持的作业类型为
-    a. Attunity Replicate Task
-    b. ORACLE STORE PROCEDURE
-    c. ORACLE SELECT SQL STATEMEN
-    d. SHELL OR BIN
-3.程序所在目录不能包含中文
-4.目前程序仅在windows测试，如迁移至linux，可能需要完善其中涉及路径的代码
+2.程序所在目录不能包含中文
 
 Example:
   >>> jobcontrol [configfile] -runtask
 '''
 
 
-# @Date    : 2016-11-07 23:35:18
+# @Date    : 2016-12-31 23:35:18
 # @Author  : wudi (wudi@xiyuetech.com)
-# @Link    : https://github.com/wudixy/jci/tree/master/2.1
 # @Version : 2.1
 
 # base module
@@ -150,7 +143,6 @@ class RunJob:
     def send_mail(self, mail_user, mail_pass, mail_host, to_list, sub, content):
         '''sent mail ,if sent success ,return True'''
         content = content + '\n' + 'make mail time:' + self.getTime()
-        # me="hello"+"<"+mail_user+"@"+mail_postfix+">"
         me = mail_user
         msg = MIMEText(content, _subtype='plain', _charset='gb2312')
         msg['Subject'] = sub

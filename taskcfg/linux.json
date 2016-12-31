@@ -1,0 +1,31 @@
+{
+  "TASKNAME":"linuxtask",
+  "WAITSEC":2,
+  "MAXJOB":5,
+  "LOGLEVEL":"DEBUG",
+  "ORACLECLIENT":"D:\\oracleClient64",
+  "MAILCONFIG":{
+       "MAILTO_LIST":["abc@xxx.com"],
+       "MAIL_HOST":"smtp.xxx.com",
+       "MAIL_USER":"xxx@xxx.com",
+       "MAIL_PWD":"password",
+       "MAIL_POSTFIX":"xxx.com"
+  },
+  "TASKCONFIG":[
+      {
+        "JOBID":"j1",
+        "DEP":"",
+        "JOBTYPE":"SHELL",
+        "EXECUTE":"/home/wudi/code/github/jobctl/testjob/l1.sh",
+        "PARAM":""
+      },
+      
+      {
+        "JOBID":"j2",
+        "DEP":"j1",
+        "JOBTYPE":"SHELL",
+        "EXECUTE":"/home/wudi/code/github/jobctl/testjob/l2.sh",
+        "PARAM":""
+      }
+    ]
+}

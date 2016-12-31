@@ -45,7 +45,7 @@ import platform
 # import pdb
 
 # Third party module
-# import cx_Oracle
+import cx_Oracle
 
 
 # MAPPING OF WAIT TYPE JOB
@@ -72,6 +72,10 @@ class RunJob:
                "WARNING": logging.WARNING,
                "ERROR": logging.ERROR}
 
+    # 为了独立oracle模块单做做的准备，暂时无用
+    _oracle_bin_path = ""
+    _oracle_lib_path = ""
+
     # ATTUNITY REPLICATE COMMAND SUCCEEDED STRING
     AR_SUCESS_TEXT = 'Succeeded'
 
@@ -87,21 +91,24 @@ class RunJob:
         a = string.atol(a)
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a))
 
-    def loadOracleMod(self, binpath, libpath):
+    def loadOracleMod(self):
         pathsp = ':'
         if 'Windows' in platform.system():
             pathsp = ';'
-        if 'PATH' in os.environ:
-            os.environ['PATH'] = binpath + pathsp + os.environ['PATH']
-            self.log.info('set path:%s'%(os.environ['PATH']))
+        if 'PATH' in os.environ and self._oracle_bin_path:
+            os.environ['PATH'] = self._oracle_bin_path + \
+                pathsp + os.environ['PATH']
+            self.log.debug('set path:%s' % (os.environ['PATH']))
 
-        if 'LD_LIBRARY_PATH' in os.environ:
-            os.environ['LD_LIBRARY_PATH'] = libpath+ pathsp + os.environ['LD_LIBRARY_PATH']
-            self.log.info('set LD_LIBRARY_PATH:%s' % (os.environ['LD_LIBRARY_PATH']))
+        if 'LD_LIBRARY_PATH' in os.environ and self._oracle_lib_path:
+            os.environ['LD_LIBRARY_PATH'] = self._oracle_lib_path + \
+                pathsp + os.environ['LD_LIBRARY_PATH']
+            self.log.debug('set LD_LIBRARY_PATH:%s' %
+                           (os.environ['LD_LIBRARY_PATH']))
         try:
             import cx_Oracle
             return True
-        except Exception,e:
+        except Exception, e:
             self.log.info(str(e))
             return False
 
@@ -166,7 +173,7 @@ class RunJob:
         """ start Attunity Replicate TASK"""
         try:
             cmd = 'repctl -d "%s"' % (ddir, )
-            CDCPRO = os.path.join(pdir,cmd)
+            CDCPRO = os.path.join(pdir, cmd)
             #CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
@@ -199,7 +206,7 @@ class RunJob:
         GETTASKSTATUSCMD = 'connect\ngettaskstatus %s\nquit\n'
         try:
             cmd = 'repctl -d "%s"' % (ddir, )
-            CDCPRO = os.path.join(pdir,cmd)
+            CDCPRO = os.path.join(pdir, cmd)
             # CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
@@ -248,6 +255,7 @@ class RunJob:
     def select_Oracle_sql(self, tns, use, pwd, execute):
         """执行ORACLE的sql语句"""
         try:
+            # self.loadOracleMod();
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
             cur.execute(execute)
@@ -266,6 +274,7 @@ class RunJob:
     def waitOraTabFlag(self, tns, use, pwd, execute, flag, waitsec, timeoutcnt):
         """wait oracle flag by sql,return wait status[find or timeout]"""
         try:
+            # self.loadOracleMod();
             status = WAITSTATUS["TIMEOUT"]  # 0 waiting,1 findflag,2 timeout
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
@@ -286,6 +295,7 @@ class RunJob:
     def runOraSp(self, tns, use, pwd, execute, param):
         """call oracle storeprocedure,return data by list"""
         try:
+            # self.loadOracleMod();
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
             r = cur.callproc(execute, param)
@@ -307,7 +317,7 @@ class RunJob:
             return {'st': 'normal', 'rcd': str(p.returncode)}
         except Exception, e:
             tp = sys.getfilesystemencoding()
-            #print str(e)
+            # print str(e)
             return {'st': 'exception',
                     'rcd': str(e).decode('utf-8').encode(tp)}
 
@@ -332,7 +342,7 @@ class JobCtlInterface(RunJob):
         if not os.path.exists(repdbpath):
             os.mkdir(repdbpath)
         return os.path.join(repdbpath, self.tconfig['TASKNAME'] + '.DB')
-        #return repdbpath + '\\' + self.tconfig['TASKNAME'] + '.DB'
+        # return repdbpath + '\\' + self.tconfig['TASKNAME'] + '.DB'
 
     def __checkBaseParams(self, key, type, default):
         if (key not in self.tconfig.keys()) or \
@@ -402,14 +412,14 @@ class JobCtlInterface(RunJob):
 
     def initLog(self):
         '''初始化日志'''
-        #logdir = self.__scriptPath + '\\log'
+        # logdir = self.__scriptPath + '\\log'
         logdir = os.path.join(self.__scriptPath, 'log')
         if not os.path.exists(logdir):
             os.mkdir(logdir)
         nm = '%s_%s%s.%s' % \
-              ('JCI', self.tconfig['TASKNAME'],
-               time.strftime('%Y%m%d%H%M%S', time.localtime(time.time())),
-               'log')
+            ('JCI', self.tconfig['TASKNAME'],
+             time.strftime('%Y%m%d%H%M%S', time.localtime(time.time())),
+             'log')
         lnm = os.path.join(logdir, nm)
         return RunJob.initLog(self, lnm,
                               self.LOGLEVE[self.tconfig['LOGLEVEL']])
@@ -425,22 +435,23 @@ class JobCtlInterface(RunJob):
                 self.tconfig = json.loads(js)
                 # print self.tconfig
                 self.repDBName = self.__getRepDBName()
-                '''
-                if "LOGSHOWCONSOLE" in self.tconfig.keys() and self.tconfig['LOGSHOWCONSOLE']:
+                """
+                if "LOGSHOWCONSOLE" in self.tconfig.keys() \
+                    and self.tconfig['LOGSHOWCONSOLE']:
                     sc = True
                 else:
                     sc = False
-                '''
+                """
                 if "ORACLE_BIN_PATH" in self.tconfig.keys():
-                    binpath = self.tconfig['ORACLE_BIN_PATH']
+                    self._oracle_bin_path = self.tconfig['ORACLE_BIN_PATH']
                 else:
-                    binpath = "."
+                    self._oracle_bin_path = ''
                 if "ORACLE_LIB_PATH" in self.tconfig.keys():
-                    libpath = self.tconfig["ORACLE_LIB_PATH"]
+                    self._oracle_lib_path = self.tconfig["ORACLE_LIB_PATH"]
                 else:
-                    libpath = "."
+                    self._oracle_lib_path = ""
                 self.initLog()
-                self.loadOracleMod(binpath,libpath)
+                # self.loadOracleMod()
                 return True
             except Exception, e:
                 print 'Read Config File Error,pls check'
@@ -1153,3 +1164,4 @@ def debug():
 
 if __name__ == '__main__':
     main()
+    

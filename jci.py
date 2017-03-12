@@ -25,6 +25,8 @@ Example:
 # @Link    : https://github.com/wudixy/jci/tree/master/2.1
 # @Version : 2.1
 
+# github merge测试
+
 # base module
 import json
 import os

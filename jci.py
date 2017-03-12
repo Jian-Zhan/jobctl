@@ -20,12 +20,12 @@ Example:
 '''
 
 
-# @Date    : 2016-11-07 23:35:18
+# @Date    : 2017-03-12 23:35:18
 # @Author  : wudi (wudi@xiyuetech.com)
-# @Link    : https://github.com/wudixy/jci/tree/master/2.1
-# @Version : 2.1
+# @Link    : https://github.com/wudixy/jobctl
+# @Version : 2.3
 
-# github merge测试
+#iss001 完善对ar返回值的判断，在低版本ar中，task状态不包含start_time返回
 
 # base module
 import json
@@ -193,9 +193,15 @@ class RunJob:
                         break
             xx = json.loads(b)
 
+            #iss001 检查ar返回是否有start_time，在低版本ar中(3.1)不包含此返回值
+            if 'start_time' in xx['task_status'].keys():
+                starttime = self.__formatARTime(xx['task_status']['start_time']
+            else:
+                starttime = '1970-01-01 00:00:00'
+
             r = {'state': xx['task_status']["state"],
                  "full_load_completed": str(xx['task_status']['full_load_completed']),
-                 'start_time': self.__formatARTime(xx['task_status']['start_time'])
+                 'start_time': starttime)
                  }
             # task正在运行时不会有stop_time这个key
             # 'stop_time': self.__formatARTime(xx['task_status']['stop_time']),

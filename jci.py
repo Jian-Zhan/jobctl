@@ -1,4 +1,6 @@
+#!/home/wudi/code/python/virtualenv/jobctl/bin/python
 # -*- coding: utf-8 -*-
+
 
 '''作业调度模块
 
@@ -7,22 +9,15 @@
 Notes:
 
 1.需要安装ORACLE客户端
-2.目前支持的作业类型为
-    a. Attunity Replicate Task
-    b. ORACLE STORE PROCEDURE
-    c. ORACLE SELECT SQL STATEMEN
-    d. SHELL OR BIN
-3.程序所在目录不能包含中文
-4.目前程序仅在windows测试，如迁移至linux，可能需要完善其中涉及路径的代码
+2.程序所在目录不能包含中文
 
 Example:
   >>> jobcontrol [configfile] -runtask
 '''
 
 
-# @Date    : 2016-11-07 23:35:18
+# @Date    : 2016-12-31 23:35:18
 # @Author  : wudi (wudi@xiyuetech.com)
-# @Link    : https://github.com/wudixy/jci/tree/master/2.1
 # @Version : 2.1
 
 # github merge测试
@@ -41,6 +36,7 @@ import threading
 import sys
 import string
 import uuid
+import platform
 # import pdb
 
 # Third party module
@@ -71,6 +67,10 @@ class RunJob:
                "WARNING": logging.WARNING,
                "ERROR": logging.ERROR}
 
+    # 为了独立oracle模块单做做的准备，暂时无用
+    _oracle_bin_path = ""
+    _oracle_lib_path = ""
+
     # ATTUNITY REPLICATE COMMAND SUCCEEDED STRING
     AR_SUCESS_TEXT = 'Succeeded'
 
@@ -86,6 +86,27 @@ class RunJob:
         a = string.atol(a)
         return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(a))
 
+    def loadOracleMod(self):
+        pathsp = ':'
+        if 'Windows' in platform.system():
+            pathsp = ';'
+        if 'PATH' in os.environ and self._oracle_bin_path:
+            os.environ['PATH'] = self._oracle_bin_path + \
+                pathsp + os.environ['PATH']
+            self.log.debug('set path:%s' % (os.environ['PATH']))
+
+        if 'LD_LIBRARY_PATH' in os.environ and self._oracle_lib_path:
+            os.environ['LD_LIBRARY_PATH'] = self._oracle_lib_path + \
+                pathsp + os.environ['LD_LIBRARY_PATH']
+            self.log.debug('set LD_LIBRARY_PATH:%s' %
+                           (os.environ['LD_LIBRARY_PATH']))
+        try:
+            import cx_Oracle
+            return True
+        except Exception, e:
+            self.log.info(str(e))
+            return False
+
     def initLog(self, logname, level):
         """INIT LOG SETTING,初始化日志设置"""
         self.log = logging.getLogger('jci')
@@ -94,8 +115,12 @@ class RunJob:
         formatter = logging.Formatter(logformat)
         ch.setFormatter(formatter)
         self.log.addHandler(ch)
-        self.log.setLevel(level)
+        self.log.setLevel(logging.INFO)
         self.log.datefmt = '%Y-%m-%dT%H:%M:%S'
+        console = logging.StreamHandler()
+        console.setLevel(level)
+        console.setFormatter(formatter)
+        self.log.addHandler(console)
 
         '''
         logformat = '%(asctime)s [%(levelname)s] [line:%(lineno)d] %(funcName) s.%(message) s'
@@ -120,7 +145,6 @@ class RunJob:
     def send_mail(self, mail_user, mail_pass, mail_host, to_list, sub, content):
         '''sent mail ,if sent success ,return True'''
         content = content + '\n' + 'make mail time:' + self.getTime()
-        # me="hello"+"<"+mail_user+"@"+mail_postfix+">"
         me = mail_user
         msg = MIMEText(content, _subtype='plain', _charset='gb2312')
         msg['Subject'] = sub
@@ -132,6 +156,7 @@ class RunJob:
             server.login(mail_user, mail_pass)
             server.sendmail(me, to_list, msg.as_string())
             server.close()
+            # self.log.debug('send mail %s' % (sub,))
             return True
         except Exception, e:
             tp = sys.getfilesystemencoding()
@@ -141,7 +166,9 @@ class RunJob:
     def runAttunityTask(self, pdir, ddir, taskname, operation, flags):
         """ start Attunity Replicate TASK"""
         try:
-            CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
+            cmd = 'repctl -d "%s"' % (ddir, )
+            CDCPRO = os.path.join(pdir, cmd)
+            #CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
             startar = 'connect\nexecute task=%s operation=%d flags=%d\nquit\n'
@@ -172,7 +199,9 @@ class RunJob:
         # Get ATTUNITY REPLICATE TASK status command
         GETTASKSTATUSCMD = 'connect\ngettaskstatus %s\nquit\n'
         try:
-            CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
+            cmd = 'repctl -d "%s"' % (ddir, )
+            CDCPRO = os.path.join(pdir, cmd)
+            # CDCPRO = '"%s\\repctl" -d "%s"' % (pdir, ddir)
             p = subprocess.Popen(CDCPRO, stdin=subprocess.PIPE,
                                  stdout=subprocess.PIPE)
             p.stdin.write(GETTASKSTATUSCMD % (taskname))
@@ -220,6 +249,7 @@ class RunJob:
     def select_Oracle_sql(self, tns, use, pwd, execute):
         """执行ORACLE的sql语句"""
         try:
+            # self.loadOracleMod();
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
             cur.execute(execute)
@@ -238,6 +268,7 @@ class RunJob:
     def waitOraTabFlag(self, tns, use, pwd, execute, flag, waitsec, timeoutcnt):
         """wait oracle flag by sql,return wait status[find or timeout]"""
         try:
+            # self.loadOracleMod();
             status = WAITSTATUS["TIMEOUT"]  # 0 waiting,1 findflag,2 timeout
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
@@ -258,6 +289,7 @@ class RunJob:
     def runOraSp(self, tns, use, pwd, execute, param):
         """call oracle storeprocedure,return data by list"""
         try:
+            # self.loadOracleMod();
             db = cx_Oracle.connect(use, pwd, tns)
             cur = db.cursor()
             r = cur.callproc(execute, param)
@@ -279,7 +311,7 @@ class RunJob:
             return {'st': 'normal', 'rcd': str(p.returncode)}
         except Exception, e:
             tp = sys.getfilesystemencoding()
-            print str(e)
+            # print str(e)
             return {'st': 'exception',
                     'rcd': str(e).decode('utf-8').encode(tp)}
 
@@ -299,10 +331,12 @@ class JobCtlInterface(RunJob):
 
     def __getRepDBName(self):
         '''获取运行时资料库全路径'''
-        repdbpath = self.__scriptPath + '\\' + 'runtimedb'
+        repdbpath = os.path.join(self.__scriptPath, 'runtimedb')
+        #repdbpath = self.__scriptPath + '\\' + 'runtimedb'
         if not os.path.exists(repdbpath):
             os.mkdir(repdbpath)
-        return repdbpath + '\\' + self.tconfig['TASKNAME'] + '.DB'
+        return os.path.join(repdbpath, self.tconfig['TASKNAME'] + '.DB')
+        # return repdbpath + '\\' + self.tconfig['TASKNAME'] + '.DB'
 
     def __checkBaseParams(self, key, type, default):
         if (key not in self.tconfig.keys()) or \
@@ -372,13 +406,15 @@ class JobCtlInterface(RunJob):
 
     def initLog(self):
         '''初始化日志'''
-        logdir = self.__scriptPath + '\\log'
+        # logdir = self.__scriptPath + '\\log'
+        logdir = os.path.join(self.__scriptPath, 'log')
         if not os.path.exists(logdir):
             os.mkdir(logdir)
-        lnm = '%s\\%s_%s%s.%s' % \
-              (logdir, 'JCI', self.tconfig['TASKNAME'],
-               time.strftime('%Y%m%d%H%M%S', time.localtime(time.time())),
-               'log')
+        nm = '%s_%s%s.%s' % \
+            ('JCI', self.tconfig['TASKNAME'],
+             time.strftime('%Y%m%d%H%M%S', time.localtime(time.time())),
+             'log')
+        lnm = os.path.join(logdir, nm)
         return RunJob.initLog(self, lnm,
                               self.LOGLEVE[self.tconfig['LOGLEVEL']])
 
@@ -387,19 +423,33 @@ class JobCtlInterface(RunJob):
         if os.path.exists(fname):
             f = open(fname)
             js = f.read()
+            # js = js.replace("\n", " ").replace('\r', " ")
+            # print js
             try:
                 self.tconfig = json.loads(js)
+                # print self.tconfig
                 self.repDBName = self.__getRepDBName()
-                '''
-                if "LOGSHOWCONSOLE" in self.tconfig.keys() and self.tconfig['LOGSHOWCONSOLE']:
+                """
+                if "LOGSHOWCONSOLE" in self.tconfig.keys() \
+                    and self.tconfig['LOGSHOWCONSOLE']:
                     sc = True
                 else:
                     sc = False
-                '''
+                """
+                if "ORACLE_BIN_PATH" in self.tconfig.keys():
+                    self._oracle_bin_path = self.tconfig['ORACLE_BIN_PATH']
+                else:
+                    self._oracle_bin_path = ''
+                if "ORACLE_LIB_PATH" in self.tconfig.keys():
+                    self._oracle_lib_path = self.tconfig["ORACLE_LIB_PATH"]
+                else:
+                    self._oracle_lib_path = ""
                 self.initLog()
+                # self.loadOracleMod()
                 return True
             except Exception, e:
-                self.log.error(str(e))
+                print 'Read Config File Error,pls check'
+                print str(e)
                 return False
             finally:
                 f.close()
@@ -658,7 +708,10 @@ class JobCtlInterface(RunJob):
         cur.execute(sql)
         format_head = '|{id:^20s}|{stdt:^20s}|{enddt:^20s}|{st:^8s}|{message:^50s}|'
         formatstr = '|{id:<20s}|{stdt:<20s}|{enddt:<20s}|{st:<8s}|{message:<50s}|'
-        os.system("cls")
+        if 'Linux' in platform.system():
+            os.system('clear')
+        elif 'Windows' in platform.system():
+            os.system('cls')
         print "{name:-^124s}".format(name='')
         print format_head.format(id='JOBID', stdt='START', enddt='END',
                                  st='STATUS', message='MESSAGE')
@@ -869,6 +922,7 @@ class JobCtlInterface(RunJob):
         jobcfg = self.getJobInfo(jobid)
         # 记录作业已开始运行到资料库
         self.writeJobStatus(jobid, strdt=self.getTime(), status='RUNNING')
+        startdt = self.getTime()
         waitsec = 0
         timeoutcnt = 1
         if 'LOOP' in jobcfg.keys():
@@ -882,11 +936,20 @@ class JobCtlInterface(RunJob):
             if st == 'FINISH':
                 break
             time.sleep(waitsec)
-        if ('SENTMAIL' in jobcfg.keys()) and (jobcfg['SENTMAIL'] == 1):
-            self.send_mail('%s is %s' % (jobid, st),
-                           'msg is %s' % (self.__formatMsg(rcd)))
         self.writeJobStatus(jobid, enddt=self.getTime(),
                             status=st, msg=self.__formatMsg(rcd))
+        if ('SENTMAIL' in jobcfg.keys()) and (jobcfg['SENTMAIL'] == 1):
+            msg = 'JOBID:%s IS %s'
+            msg = msg + '\nDEPENDENT on:%s'
+            msg = msg + '\nRETURN MSG IS :%s'
+            msg = msg + '\nSTARTTIME : %s ; ENDTIME :%s'
+            msg = msg + '\n EXECUTE: %s'
+            msg = msg % (jobid, st,
+                         jobcfg['DEP'],
+                         self.__formatMsg(rcd),
+                         startdt, self.getTime(), jobcfg['EXECUTE'])
+            # self.log.debug(msg)
+            self.send_mail('%s is %s' % (jobid, st), msg)
 
     def runTask(self, showStatus=True, rerun=False):
         """run task by config file"""
@@ -938,6 +1001,8 @@ class JobCtlInterface(RunJob):
                     thd.start()
                     thlist.append(thd)
                     self.log.info('start job :%s' % (str(jobid)))
+                    time.sleep(10)
+                    continue
             # 如果获取不到有效的作业，并且没有活动作业
             elif alivejobcnt == 0:
                 logmsg = 'no job can run,and no alive thread,task FINISH'
@@ -1093,3 +1158,4 @@ def debug():
 
 if __name__ == '__main__':
     main()
+    

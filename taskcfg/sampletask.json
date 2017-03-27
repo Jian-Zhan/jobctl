@@ -4,11 +4,8 @@
   "MAXJOB":5,
   "LOGLEVEL":"DEBUG",
   "LOGSHOWCONSOLE":false,
-  "ARCONFIG":{
-       "PRO_DIR": "D:/attunity/bin",
-       "DATA_DIR":"D:/attunity/Data"
-    },
-  "ORACLECLIENT":"D:\\oracleClient64",
+  "ORACLE_BIN_PATH":"D:\\oracleClient64",
+  "ORACLE_LIB_PATH":"D:\\oracleClient64",
   "MAILCONFIG":{
        "MAILTO_LIST":["abc@xxx.com"],
        "MAIL_HOST":"smtp.xxx.com",
@@ -30,7 +27,7 @@
             "PWD" :"test"},
         "EXECUTE":"select flag from flagtest where flag=2",
         "PARAM":{"FLAG":2,"WAITSEC":5,"TIMEOUTCNT":6},
-        "SENTMAIL":1
+        "SENTMAIL":0
       },
       {
         "JOBID":"J_WAITFLAG2",

@@ -15,9 +15,10 @@ Example:
   >>> jobcontrol [configfile] -runtask
 '''
 
-# @Date    : 2016-12-31 23:35:18
+# @Date    : 2017-09-06 23:35:18
 # @Author  : wudi (wudi@xiyuetech.com)
-# @Version : 2.4
+# @Version : 2.5
+# 增添对mysql的支持
 
 # base module
 import json
@@ -78,6 +79,7 @@ class RunJob:
         pass
 
     def __formatARTime(self, tmstr):
+        '''AR返回的时间是unix时间戳,需要格式化处理'''
         a = str(tmstr)
         a = a[:len(a) - 6]
         a = string.atol(a)
@@ -172,7 +174,7 @@ class RunJob:
                 repcmd = 'repctl'
             elif 'Windows' in platform.system():
                 repcmd = 'repctl.exe'
-            cmd = '%s -d "%s"' % (repcmd,ddir, )
+            cmd = '%s -d "%s"' % (repcmd, ddir, )
             # cmd = 'repctl -d "%s"' % (ddir, )
             # issue-001 end
             CDCPRO = os.path.join(pdir, cmd)
@@ -204,7 +206,7 @@ class RunJob:
 
     def runAttunityTask(self, pdir, ddir, taskname, operation, flags):
         """ start Attunity Replicate TASK"""
-        if taskname not in self.getAttunityTaskList(pdir,ddir,'%' + taskname + '%'):
+        if taskname not in self.getAttunityTaskList(pdir, ddir, '%' + taskname + '%'):
             errmsg = 'task not found:%s' % (taskname)
             self.log.error(errmsg)
             return {'st': 'exception',
@@ -244,7 +246,7 @@ class RunJob:
              'full_load_completed': 'false',
              'start_time': '1970-01-01 00:00:00',
              'stop_time': '1970-01-01 00:00:00'}
-        if taskname not in self.getAttunityTaskList(pdir,ddir,'%' + taskname + '%'):
+        if taskname not in self.getAttunityTaskList(pdir, ddir, '%' + taskname + '%'):
             errmsg = 'task not found:%s' % (taskname)
             self.log.error(errmsg)
             r['state'] = errmsg
@@ -285,7 +287,8 @@ class RunJob:
 
             # issue-002 start
             if 'start_time' in xx['task_status']:
-                task_start_time = self.__formatARTime(xx['task_status']['start_time'])
+                task_start_time = self.__formatARTime(
+                    xx['task_status']['start_time'])
             else:
                 task_start_time = '1970-01-01 00:00:00'
             # issue-002 end
@@ -332,6 +335,30 @@ class RunJob:
             self.log.error(str(e))
             return {'st': 'exception', 'rcd': 'see log'}
 
+    def select_Mysql(self, host, port, usr, pwd, db, charset, execute):
+        """执行MySQL的sql语句"""
+        try:
+            import MySQLdb
+            db = MySQLdb.connect(host=host, port=port, user=usr, passwd=pwd,
+                                 charset=charset, db=db)
+            cur = db.cursor()
+
+            # 使用execute方法执行SQL语句
+            cur.execute(execute)
+
+            # 使用 fetchone() 方法获取一条数据库。
+            r = cur.fetchone()
+            if r:
+                res = {'st': 'normal', 'rcd': r}
+            else:
+                res = {'st': 'normal', 'rcd': 'None'}
+            cur.close()
+            db.close()
+            return res
+        except Exception, e:
+            self.log.error(str(e))
+            return {'st': 'exception', 'rcd': 'see log'}
+
     def waitOraTabFlag(self, tns, use, pwd, execute, flag, waitsec, timeoutcnt):
         """wait oracle flag by sql,return wait status[find or timeout]"""
         try:
@@ -361,6 +388,30 @@ class RunJob:
             cur = db.cursor()
             r = cur.callproc(execute, param)
             cur.close()
+            db.close()
+            return {'st': 'normal', 'rcd': r}
+        except Exception, e:
+            self.log.error(str(e))
+            return {'st': 'exception', 'rcd': str(e)}
+
+    def runMysqlSp(self, host, port, usr, pwd, db, charset, execute, param):
+        """call mysql storeprocedure,return data by list"""
+        try:
+            import MySQLdb
+            db = MySQLdb.connect(host=host, port=port, user=usr, passwd=pwd,
+                                 charset=charset, db=db)
+            cur = db.cursor()
+            r = cur.callproc(execute, param)
+            parray = []
+            i = 0
+            for p in param:
+                parray.append('@_%s_%d' % (execute, i))
+                i += 1
+            getsql = 'select ' + ','.join(parray)
+            cur.close()
+            cur = db.cursor()
+            cur.execute(getsql)
+            r = cur.fetchone()
             db.close()
             return {'st': 'normal', 'rcd': r}
         except Exception, e:
@@ -459,6 +510,8 @@ class JobCtlInterface(RunJob):
         elif isinstance(msg, basestring):
             return msg
         elif isinstance(msg, int):
+            return str(msg)
+        elif isinstance(msg, long):
             return str(msg)
         else:
             return 'can not format msg'
@@ -801,7 +854,6 @@ class JobCtlInterface(RunJob):
         else:
             self.log.warn('MAILCONFIG NOT FOUND')
 
-
     def runAttunityTask(self, jobid):
         jbcfg = self.getJobInfo(jobid)
         return RunJob.runAttunityTask(self,
@@ -840,6 +892,17 @@ class JobCtlInterface(RunJob):
                                         jobcfg['CONNECTINFO']['PWD'],
                                         jobcfg['EXECUTE'])
 
+    def select_Mysql(self, jobid):
+        jobcfg = self.getJobInfo(jobid)
+        return RunJob.select_Mysql(self,
+                                   jobcfg['CONNECTINFO']['HOST'],
+                                   jobcfg['CONNECTINFO']['PORT'],
+                                   jobcfg['CONNECTINFO']['USER'],
+                                   jobcfg['CONNECTINFO']['PWD'],
+                                   jobcfg['CONNECTINFO']['DB'],
+                                   jobcfg['CONNECTINFO']['CHARSET'],
+                                   jobcfg['EXECUTE'])
+
     def waitOraTabFlag(self, jobid):
         jobcfg = self.getJobInfo(jobid)
         return RunJob.waitOraTabFlag(self,
@@ -858,6 +921,18 @@ class JobCtlInterface(RunJob):
                                jobcfg['CONNECTINFO']['PWD'],
                                jobcfg['EXECUTE'],
                                jobcfg['PARAM'])
+
+    def runMysqlSp(self, jobid):
+        jobcfg = self.getJobInfo(jobid)
+        return RunJob.runMysqlSp(self,
+                                 jobcfg['CONNECTINFO']['HOST'],
+                                 jobcfg['CONNECTINFO']['PORT'],
+                                 jobcfg['CONNECTINFO']['USER'],
+                                 jobcfg['CONNECTINFO']['PWD'],
+                                 jobcfg['CONNECTINFO']['DB'],
+                                 jobcfg['CONNECTINFO']['CHARSET'],
+                                 jobcfg['EXECUTE'],
+                                 jobcfg['PARAM'])
 
     def callShellJob(self, jobid):
         jobcfg = self.getJobInfo(jobid)
@@ -939,6 +1014,9 @@ class JobCtlInterface(RunJob):
             if jobcfg['CONNECTINFO']['TYPE'] == 'ORACLE':
                 res = self.select_Oracle_sql(jobid)
                 st = self.checkSucessExpress(jobcfg, res)
+            elif jobcfg['CONNECTINFO']['TYPE'] == 'MYSQL':
+                res = self.select_Mysql(jobid)
+                st = self.checkSucessExpress(jobcfg, res)
             else:
                 st = 'ERROR'
                 self.log.error('job:%s,type:%s is not support' %
@@ -962,6 +1040,9 @@ class JobCtlInterface(RunJob):
         elif jobcfg['JOBTYPE'] == 'DB_PROC':
             if jobcfg['CONNECTINFO']['TYPE'] == 'ORACLE':
                 res = self.runOraSp(jobid)
+                st = self.checkSucessExpress(jobcfg, res)
+            elif jobcfg['CONNECTINFO']['TYPE'] == 'MYSQL':
+                res = self.runMysqlSp(jobid)
                 st = self.checkSucessExpress(jobcfg, res)
             else:
                 st = 'ERROR'
@@ -1226,4 +1307,4 @@ def debug():
 
 
 if __name__ == '__main__':
-     main()
+    main()

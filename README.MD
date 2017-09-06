@@ -263,6 +263,31 @@ CONFIG FILE TYPE:JSON
       }
 ```
 
+#### SELECTDBSQL和DBPROC类型中增添MYSQL支持
+主要差异来自CONNECTINFO的配置，一个典型的配置如下：
+```
+      {
+        "JOBID":"J_WAITFLAG2",
+        "DEP":"",
+        "JOBTYPE":"SELECTDBSQL",
+        "CONNECTINFO":{
+            "DBID":"d1",
+            "TYPE":"MYSQL",
+            "HOST":"192.168.203.9",
+            "PORT":3306,
+            "USER":"root",
+            "PWD" :"Xy123456*",
+            "DB" : "testdb",
+            "CHARSET": "utf8"},
+        "EXECUTE":"select id from test where nm='abc'",
+        "PARAM":{},
+        "SUCESSEXPRESSION":"rcd[0]==1",
+        "LOOP":{"WAITSEC":2,"TIMEOUTCNT":5},
+        "SENTMAIL":0
+      },
+
+```
+
 ### SAMPLE
 ```
 {

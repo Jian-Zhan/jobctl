@@ -1,0 +1,54 @@
+{
+  "TASKNAME":"TEST",
+  "WAITSEC":5,
+  "MAXJOB":5,
+  "LOGLEVEL":"DEBUG",
+  "LOGSHOWCONSOLE": false,
+  "MAILCONFIG":{
+       "MAILTO_LIST":["abc@xxx.com"],
+       "MAIL_HOST":"smtp.xxx.com",
+       "MAIL_USER":"xxx@xxx.com",
+       "MAIL_PWD":"password",
+       "MAIL_POSTFIX":"xxx.com"
+  },
+  "TASKCONFIG":[
+      {
+        "JOBID":"J_WAITFLAG2",
+        "DEP":"",
+        "JOBTYPE":"SELECTDBSQL",
+        "CONNECTINFO":{
+            "DBID":"d1",
+            "TYPE":"MYSQL",
+            "HOST":"192.168.203.9",
+            "PORT":3306,
+            "USER":"root",
+            "PWD" :"Xy123456*",
+            "DB" : "testdb",
+            "CHARSET": "utf8"},
+        "EXECUTE":"select id from test where nm='吴迪'",
+        "PARAM":{},
+        "SUCESSEXPRESSION":"rcd[0]==1",
+        "LOOP":{"WAITSEC":2,"TIMEOUTCNT":5},
+        "SENTMAIL":0
+      },
+      {
+        "JOBID":"J4",
+        "DEP":"J_WAITFLAG2",
+        "DES":"",
+        "JOBTYPE":"DB_PROC",
+        "EXECUTE":"praddout",
+        "CONNECTINFO":{
+            "DBID":"d1",
+            "TYPE":"MYSQL",
+            "HOST":"192.168.203.9",
+            "PORT":3306,
+            "USER":"root",
+            "PWD" :"Xy123456*",
+            "DB" : "testdb",
+            "CHARSET": "utf8"},
+        "PARAM":[1,2,10],
+        "SUCESSEXPRESSION":"rcd[2]==5",
+        "SENTMAIL":0
+      }
+    ]
+}
